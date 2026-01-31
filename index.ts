@@ -12,10 +12,10 @@ const AWS_REGION = 'ap-northeast-2'
 const DOMAIN = 'picouncil.com' // Update when domain is registered
 const ECR_REGISTRY = `${aws.getCallerIdentityOutput().accountId}.dkr.ecr.${AWS_REGION}.amazonaws.com`
 
-// Get git commit from picouncil-server for image tag
-function getServerGitCommit(): string {
+// Get git commit for image tags
+function getGitCommit(projectPath: string): string {
   try {
-    const commit = execSync('git -C ../picouncil-server rev-parse --short HEAD', {
+    const commit = execSync(`git -C ${projectPath} rev-parse --short HEAD`, {
       encoding: 'utf-8',
     }).trim()
     return commit
@@ -23,15 +23,18 @@ function getServerGitCommit(): string {
     try {
       return execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim()
     } catch {
-      throw new Error('Failed to get git commit hash')
+      return 'latest'
     }
   }
 }
 
-const serverCommit = getServerGitCommit()
+const serverCommit = getGitCommit('../picouncil-server')
+const adminCommit = getGitCommit('../picouncil-admin')
 const serverImage = config.get('serverImage') || `${ECR_REGISTRY}/picouncil-server:${serverCommit}`
+const adminImage = config.get('adminImage') || `${ECR_REGISTRY}/picouncil-admin:${adminCommit}`
 
 console.log(`Deploying picouncil-server image: ${serverImage}`)
+console.log(`Deploying picouncil-admin image: ${adminImage}`)
 
 // =============================================================================
 // VPC
@@ -161,6 +164,12 @@ const ecsSecurityGroup = new aws.ec2.SecurityGroup('picouncil-ecs-sg', {
       toPort: 8080,
       securityGroups: [albSecurityGroup.id],
     },
+    {
+      protocol: 'tcp',
+      fromPort: 3000,
+      toPort: 3000,
+      securityGroups: [albSecurityGroup.id],
+    },
   ],
   egress: [{ protocol: '-1', fromPort: 0, toPort: 0, cidrBlocks: ['0.0.0.0/0'] }],
   tags: { Name: 'picouncil-ecs-sg' },
@@ -229,6 +238,36 @@ const ecrRepository = new aws.ecr.Repository('picouncil-server', {
 // Lifecycle policy to cleanup old images
 new aws.ecr.LifecyclePolicy('picouncil-server-lifecycle', {
   repository: ecrRepository.name,
+  policy: JSON.stringify({
+    rules: [
+      {
+        rulePriority: 1,
+        description: 'Keep last 10 images',
+        selection: {
+          tagStatus: 'any',
+          countType: 'imageCountMoreThan',
+          countNumber: 10,
+        },
+        action: {
+          type: 'expire',
+        },
+      },
+    ],
+  }),
+})
+
+// ECR Repository for Admin
+const adminEcrRepository = new aws.ecr.Repository('picouncil-admin', {
+  name: 'picouncil-admin',
+  imageTagMutability: 'MUTABLE',
+  imageScanningConfiguration: {
+    scanOnPush: true,
+  },
+  tags: { Name: 'picouncil-admin' },
+})
+
+new aws.ecr.LifecyclePolicy('picouncil-admin-lifecycle', {
+  repository: adminEcrRepository.name,
   policy: JSON.stringify({
     rules: [
       {
@@ -473,6 +512,118 @@ const service = new aws.ecs.Service('picouncil-server-service', {
 })
 
 // =============================================================================
+// Admin Dashboard (ECS Service)
+// =============================================================================
+const adminLogGroup = new aws.cloudwatch.LogGroup('picouncil-admin-logs', {
+  name: '/ecs/picouncil-admin',
+  retentionInDays: 30,
+  tags: { Name: 'picouncil-admin-logs' },
+})
+
+const adminTaskDefinition = new aws.ecs.TaskDefinition('picouncil-admin-task', {
+  family: 'picouncil-admin',
+  cpu: '256',
+  memory: '512',
+  networkMode: 'awsvpc',
+  requiresCompatibilities: ['FARGATE'],
+  executionRoleArn: taskExecutionRole.arn,
+  taskRoleArn: taskRole.arn,
+  containerDefinitions: adminLogGroup.name.apply((logGroupName) =>
+    JSON.stringify([
+      {
+        name: 'picouncil-admin',
+        image: adminImage,
+        essential: true,
+        portMappings: [
+          {
+            containerPort: 3000,
+            protocol: 'tcp',
+          },
+        ],
+        environment: [
+          { name: 'NODE_ENV', value: 'production' },
+          { name: 'NEXT_PUBLIC_API_URL', value: `https://api.${DOMAIN}` },
+          { name: 'NEXT_PUBLIC_SITE_URL', value: `https://admin.${DOMAIN}` },
+        ],
+        logConfiguration: {
+          logDriver: 'awslogs',
+          options: {
+            'awslogs-group': logGroupName,
+            'awslogs-region': AWS_REGION,
+            'awslogs-stream-prefix': 'ecs',
+          },
+        },
+        healthCheck: {
+          command: ['CMD-SHELL', 'wget -q --spider http://localhost:3000 || exit 1'],
+          interval: 30,
+          timeout: 5,
+          retries: 3,
+          startPeriod: 60,
+        },
+      },
+    ])
+  ),
+  tags: { Name: 'picouncil-admin-task' },
+})
+
+const adminTargetGroup = new aws.lb.TargetGroup('picouncil-admin-tg', {
+  name: 'picouncil-admin-tg',
+  port: 3000,
+  protocol: 'HTTP',
+  targetType: 'ip',
+  vpcId: vpc.id,
+  healthCheck: {
+    path: '/',
+    healthyThreshold: 2,
+    unhealthyThreshold: 3,
+    timeout: 5,
+    interval: 30,
+  },
+  tags: { Name: 'picouncil-admin-tg' },
+})
+
+// HTTPS listener rule for admin subdomain
+new aws.lb.ListenerRule('picouncil-admin-rule', {
+  listenerArn: httpsListener.arn,
+  priority: 10,
+  conditions: [
+    {
+      hostHeader: {
+        values: [`admin.${DOMAIN}`],
+      },
+    },
+  ],
+  actions: [
+    {
+      type: 'forward',
+      targetGroupArn: adminTargetGroup.arn,
+    },
+  ],
+})
+
+const adminService = new aws.ecs.Service('picouncil-admin-service', {
+  name: 'picouncil-admin',
+  cluster: cluster.arn,
+  taskDefinition: adminTaskDefinition.arn,
+  desiredCount: 1,
+  launchType: 'FARGATE',
+  networkConfiguration: {
+    subnets: [privateSubnetA.id, privateSubnetB.id],
+    securityGroups: [ecsSecurityGroup.id],
+    assignPublicIp: false,
+  },
+  loadBalancers: [
+    {
+      targetGroupArn: adminTargetGroup.arn,
+      containerName: 'picouncil-admin',
+      containerPort: 3000,
+    },
+  ],
+  healthCheckGracePeriodSeconds: 60,
+  tags: { Name: 'picouncil-admin-service' },
+})
+
+// =============================================================================
 // S3 Bucket (File Storage)
 // =============================================================================
 const filesBucket = new aws.s3.BucketV2('picouncil-files', {
@@ -512,7 +663,8 @@ new aws.s3.BucketPublicAccessBlock('picouncil-files-public-access', {
 // =============================================================================
 export const vpcId = vpc.id
 export const albDnsName = alb.dnsName
-export const ecrRepositoryUrl = ecrRepository.repositoryUrl
+export const ecrServerUrl = ecrRepository.repositoryUrl
+export const ecrAdminUrl = adminEcrRepository.repositoryUrl
 export const databaseEndpoint = database.endpoint
 export const filesBucketName = filesBucket.id
 export const clusterArn = cluster.arn
