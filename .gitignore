@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Build
+bin/
+
+# Pulumi
+.pulumi/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Environment
+.env
+.env.local
