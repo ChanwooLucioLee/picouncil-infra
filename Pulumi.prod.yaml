@@ -1,9 +1,7 @@
 config:
   aws:region: ap-northeast-2
   picouncil-infra:instanceType: t4g.micro
-  # Set these via: pulumi config set --secret <key> <value>
-  # picouncil-infra:dbPassword: xxx
-  # picouncil-infra:jwtSecret: xxx
-  # picouncil-infra:certificateArn: arn:aws:acm:...
-  # picouncil-infra:cloudflareZoneId: xxx
-  # picouncil-infra:cloudflareAccountId: xxx
+  # Set these secrets via:
+  # pulumi config set --secret database-url "postgres://..."
+  # pulumi config set --secret jwt-secret "..."
+  # pulumi config set --secret cloudflareTunnelToken "..."  (optional, for custom domain)
