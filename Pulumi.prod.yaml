@@ -5,3 +5,14 @@ config:
   # pulumi config set --secret database-url "postgres://..."
   # pulumi config set --secret jwt-secret "..."
   # pulumi config set --secret cloudflareTunnelToken "..."  (optional, for custom domain)
+
+  picouncil-infra:cloudflareAccountId: 5eca17d78fc38c8e9d5347b2e109eea3
+  picouncil-infra:database-url:
+    secure: AAABAB80//2RaaY0HADKGCJOSOxzgEgTF9zvSDYgQ7eeqbs5qWDJnk/eMkOcIjGPRyCsT5Het6RdVk+2UXYJz4XnIuSdTNqYIqCX4jYMgNQVeYSm7BbKQ1sD6MxJSuFWpyHHaHP7O+GH5u0xBnQhuoH/8XyACWy+pHjwCZuccPloEINzq5ASuMt5zvLN28bWwJugGOOb6Kzy3Dx4ifU=
+  picouncil-infra:jwt-secret:
+    secure: AAABANwugUBSRnBOQlTj2Ja03Z9BmCQ9zns2Uh2rkZk93l+AMaNn55BbqnRv5mL5WjMFF166H6yWKQVaXPnLMmB2mJxRMbgDrgXFQwQt1tVTtYdvvxOgfaX7Ei+7+rqA
+  picouncil-infra:cloudflareZoneId: d98ba095f328c6185eaed1a442c34bc4
+  picouncil-infra:cloudflareTunnelSecret:
+    secure: AAABAJmJnjQG3ipobsR3cppdtm5XrWXc8LOrJgN089+21OLWzTs/bA+RebJQucM+COPsbrM0a48tAE/Cg4Yi7GV4IPRUYm1tGuW0Qg==
+  cloudflare:apiToken:
+    secure: AAABAD8ZB0pRDLkuCeGHqkc+BwU6PUT89Aaah9gOp5Bo0DknGcTyutxlyfdxz9GbPMsWV+gmg2iQh3EkM2nVOM1RE4jZ6D1S
