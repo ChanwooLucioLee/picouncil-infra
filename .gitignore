@@ -19,3 +19,4 @@ bin/
 # Environment
 .env
 .env.local
+.vercel

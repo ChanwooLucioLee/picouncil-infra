@@ -15,4 +15,4 @@ config:
   picouncil-infra:cloudflareTunnelSecret:
     secure: AAABAJmJnjQG3ipobsR3cppdtm5XrWXc8LOrJgN089+21OLWzTs/bA+RebJQucM+COPsbrM0a48tAE/Cg4Yi7GV4IPRUYm1tGuW0Qg==
   cloudflare:apiToken:
-    secure: AAABAD8ZB0pRDLkuCeGHqkc+BwU6PUT89Aaah9gOp5Bo0DknGcTyutxlyfdxz9GbPMsWV+gmg2iQh3EkM2nVOM1RE4jZ6D1S
+    secure: AAABABmSX2DfHYj4WXLVqcqiItQCplyuFm/0YYe4hEhmzQOJ1cjOCm0FOxqOSQ+Yx724JRQOs2+WrNQIza/p4mIXu/P3BXVs
